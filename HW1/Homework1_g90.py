@@ -73,10 +73,14 @@ should give the exact count of triangles (unique for each graph), using C>1 prov
 
 
 from pyspark import SparkContext, SparkConf
+from CountTriangles import CountTriangles
 import sys
 import os
 import random as rand
 
+def h_c(u, C):
+    hash_value = ((a * u + b) % p) % C
+    return hash_value
 
 def MR_ApproxTCwithNodeColors(edges, C):
 	"""
@@ -89,7 +93,42 @@ def MR_ApproxTCwithNodeColors(edges, C):
 	Returns:
 		int: number of triangles.
 	"""
-	print("prova")
+	#	ROUND 1:
+	#Create a new RDD where each element is a key-value pair, with: 
+ 	#		key: result of the hash function applied to the first node of the edge.
+	# 		value: original element itself
+	#then filter out the None values that are created when the two nodes of an edge have different colors.
+	print("START")
+	colored_edges = edges.flatMap(lambda x: [(h_c(x[0], C), x)] if (h_c(x[0], C) == h_c(x[1], C)) else []) # <-- MAP PHASE (R1)
+
+	print("colored_edges")
+	#group the edges by color, thus by the same key, and return pairs (key, list(edge)).
+	E_i = colored_edges.groupByKey() # <-- SHUFFLE+GROUPING (R1)
+	print(E_i.collect())
+ 
+	print("E_i")
+	#count the number of triangles in each subset E_i.
+	#Apply CountTriangle() to each list v in the RDD and return a new RDD with (k, number)
+	T_i = E_i.mapValues(CountTriangles)  # <-- REDUCE PHASE (R1)
+	print(T_i.collect())
+ 
+ 	#we use map instead of flatMap because CountTriangles returns a list of one element, and also
+	# we don't need to use reduceByKey because we don't need to sum the values of the same key.
+	#TODO da controllare
+	
+	print("r2")
+ 	#	ROUND 2:
+	#T_final = C^2 ∑ T_i(i) as final estimate of the number of triangles in G.
+	
+	#reduce(lambda x, y: (x[0], x[1] + y[1]))
+	t_2 = T_i.reduceByKey(lambda x, y: (0, x[1] + y[1]))
+	#T_i.reduceByKey(lambda x, y: x + y).map(lambda x: x[1]).sum()
+ 
+	print(t_2.collect())
+ 
+	#T_final = C**2 * T_i.reduce(lambda x, y: (x[0], x[1] + y[1])) # <-- REDUCE PHASE (R2)
+ 
+	#print("Number of triangles (alg 1): " + str(T_final))
 
 
 def MR_ApproxTCwithSparkPartitions(edges):
@@ -120,11 +159,11 @@ def main():
 
 	# 1. Reads parameters C and R
 	C = sys.argv[1]
-	assert C.isdigit() and C >= 1, "K must be an integer and greater than 0"
+	assert C.isdigit() and int(C) >= 1, "K must be an integer and greater than 0"
 	C = int(C)
 
 	R = sys.argv[2]
-	assert R.isdigit() and C >= 1, "K must be an integer and greater than 0"
+	assert R.isdigit() and int(R) >= 1, "K must be an integer and greater than 0"
 	R = int(R)
 
 	# 2. Reads the input graph into an RDD of strings (called rawData) and transform it into an RDD 
@@ -135,13 +174,20 @@ def main():
 	rawData = sc.textFile(data_path, minPartitions = C).cache()#.cache lo mettiamo anche qui ??
 	edges = rawData.map(lambda x: tuple(map(int, x.split(',')))).repartition(numPartitions = C).cache()
  
+	#TODO # create an RDD from the list of edges ( sto punto sopra non so se sia giusto)
+	#rdd = sc.parallelize(edges) IN CERTI CODICI VEDO QUESTO, NO SO SE SERVE
+ 
  	# 3. Prints: the name of the file, the number of edges of the graph, C, and R.
 	print("File name: ", data_path)
 	print("Number of edges: ", edges.count())
 	print("C: ", C)
 	print("R: ", R)
-
+ 
+	#print(edges.collect()) to print the edges in the RDD
+ 
 	# 4. Runs R times MR_ApproxTCwithNodeColors to get R independent estimates tfinal of the number of triangles in the input graph.
+	for i in range(R):
+		MR_ApproxTCwithNodeColors(edges, C)
 
 	# 5. Prints: the median of the R estimates returned by MR_ApproxTCwithNodeColors and the average running time of MR_ApproxTCwithNodeColors over the R runs.
  
@@ -153,4 +199,7 @@ def main():
 
  
 if __name__ == "__main__":
+	p = 8191 # prime number
+	a = rand.randint(1, p-1)
+	b = rand.randint(0, p-1)
 	main()
