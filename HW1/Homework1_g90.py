@@ -98,37 +98,34 @@ def MR_ApproxTCwithNodeColors(edges, C):
  	#		key: result of the hash function applied to the first node of the edge.
 	# 		value: original element itself
 	#then filter out the None values that are created when the two nodes of an edge have different colors.
-	print("START")
 	colored_edges = edges.flatMap(lambda x: [(h_c(x[0], C), x)] if (h_c(x[0], C) == h_c(x[1], C)) else []) # <-- MAP PHASE (R1)
 
-	print("colored_edges")
 	#group the edges by color, thus by the same key, and return pairs (key, list(edge)).
 	E_i = colored_edges.groupByKey() # <-- SHUFFLE+GROUPING (R1)
-	print(E_i.collect())
- 
-	print("E_i")
+	
 	#count the number of triangles in each subset E_i.
 	#Apply CountTriangle() to each list v in the RDD and return a new RDD with (k, number)
 	T_i = E_i.mapValues(CountTriangles)  # <-- REDUCE PHASE (R1)
-	print(T_i.collect())
- 
+	
  	#we use map instead of flatMap because CountTriangles returns a list of one element, and also
 	# we don't need to use reduceByKey because we don't need to sum the values of the same key.
 	#TODO da controllare
 	
-	print("r2")
- 	#	ROUND 2:
+	#	ROUND 2:
 	#T_final = C^2 ∑ T_i(i) as final estimate of the number of triangles in G.
 	
 	#reduce(lambda x, y: (x[0], x[1] + y[1]))
-	t_2 = T_i.reduceByKey(lambda x, y: (0, x[1] + y[1]))
+	#t_2 = T_i.reduceByKey(lambda x, y: (0, x[1] + y[1]))
+	#t_2 = T_i.reduce(lambda x, y: x+y )
+	
 	#T_i.reduceByKey(lambda x, y: x + y).map(lambda x: x[1]).sum()
  
-	print(t_2.collect())
+	#print(t_2.collect())
+	#print(str(t_2))
  
-	#T_final = C**2 * T_i.reduce(lambda x, y: (x[0], x[1] + y[1])) # <-- REDUCE PHASE (R2)
- 
-	#print("Number of triangles (alg 1): " + str(T_final))
+	#T_final = C**2 * T_i.reduce(lambda x, y: (x[0], x[1] + y[1]))
+	T_final = C**2 * T_i.map(lambda x: x[1]).reduce(lambda x, y: x + y) # <-- REDUCE PHASE (R2)
+	print("Number of triangles (alg 1): " + str(T_final))
 
 
 def MR_ApproxTCwithSparkPartitions(edges):
