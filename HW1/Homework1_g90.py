@@ -108,6 +108,7 @@ def MR_ApproxTCwithNodeColors(edges, C):
 	#count the number of triangles in each subset E_i.
 	#Apply CountTriangle() to each list v in the RDD and return a new RDD with (k, number)
 	T_i = E_i.mapValues(CountTriangles)  # <-- REDUCE PHASE (R1)
+	# T_i = E_i.reduceByKey(CountTriangles)  # <-- REDUCE PHASE (R1)
 	#TODO da controllare
 	
 	#	ROUND 2:
@@ -135,16 +136,18 @@ def MR_ApproxTCwithSparkPartitions(edges, C):
 	"""
  	#	ROUND 1:
 	#Partition the edges at random into C subsets E(0),E(1),...E(C−1)
-	E_i = edges.flatMap(lambda x: [(rand.randint(0, C-1), x)]) # <-- MAP PHASE (R1)
+	#E_i = edges.flatMap(lambda x: [(rand.randint(0, C-1), x)]) # <-- MAP PHASE (R1)
  
-	E = E_i.groupByKey() 		# <-- SHUFFLE+GROUPING (R1)
+	#E = E_i.groupByKey() 		# <-- SHUFFLE+GROUPING (R1)
 	
+
 	#Compute the partial counts T(0),T(1),...,T(C−1) of triangles in each subset E(i)
-	T_i = E.mapValues(CountTriangles)	# <-- REDUCE PHASE (R1)
- 
+	T_i = edges.mapPartitions(lambda partition: [CountTriangles(partition)]) # <-- REDUCE PHASE (R1)
+	#T_i = E.mapValues(CountTriangles)	# <-- REDUCE PHASE (R1)
+
 	#	ROUND 2:
  	#Compute the total count
-	return C**2 * T_i.map(lambda x: x[1]).reduce(lambda x, y: x + y)# <-- REDUCE PHASE (R1)
+	return C**2 * T_i.reduce(lambda x, y: x + y)# <-- REDUCE PHASE (R2)
 	
 
 
@@ -180,10 +183,7 @@ def main():
 	
 	rawData = sc.textFile(data_path, minPartitions = C)
 	edges = rawData.map(lambda x: tuple(map(int, x.split(',')))).repartition(numPartitions = C).cache()
- 
-	#TODO # create an RDD from the list of edges ( sto punto sopra non so se sia giusto)
-	#rdd = sc.parallelize(edges) IN CERTI CODICI VEDO QUESTO, NO SO SE SERVE
- 
+  
  	# 3. Prints: the name of the file, the number of edges of the graph, C, and R.
 	print("Dataset = ", data_path)
 	print("Number of Edges = ", edges.count())
