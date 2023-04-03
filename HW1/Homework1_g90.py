@@ -172,13 +172,13 @@ def main():
 	R = int(R)
 
 	# 2. Reads the input graph into an RDD of strings (called rawData) and transform it into an RDD 
-  	#	of edges (called edges), represented as pairs of integers, partitioned into C partitions, and cached
+	#	of edges (called edges), represented as pairs of integers, partitioned into C partitions, and cached
 	data_path = sys.argv[3]
 	assert os.path.isfile(data_path), "File or folder not found"
 	
 	#TODO IMPORTANTE: It is important that the local space required by the algorithm be proportional to the size of the largest subset E(i)
 	
-	rawData = sc.textFile(data_path, minPartitions = C).cache()#.cache lo mettiamo anche qui ??
+	rawData = sc.textFile(data_path, minPartitions = C)
 	edges = rawData.map(lambda x: tuple(map(int, x.split(',')))).repartition(numPartitions = C).cache()
  
 	#TODO # create an RDD from the list of edges ( sto punto sopra non so se sia giusto)
