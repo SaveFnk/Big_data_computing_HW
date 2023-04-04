@@ -77,6 +77,7 @@ from CountTriangles import CountTriangles
 import sys
 import os
 import random as rand
+import time
 
 def h_c(u, a, b, C):
     hash_value = ((a * u + b) % p) % C
@@ -108,18 +109,9 @@ def MR_ApproxTCwithNodeColors(edges, C):
 	#count the number of triangles in each subset E_i.
 	#Apply CountTriangle() to each list v in the RDD and return a new RDD with (k, number)
 	T_i = E_i.mapValues(CountTriangles)  # <-- REDUCE PHASE (R1)
-	# T_i = E_i.reduceByKey(CountTriangles)  # <-- REDUCE PHASE (R1)
-	#TODO da controllare
 	
 	#	ROUND 2:
 	#T_final = C^2 ∑ T_i(i) as final estimate of the number of triangles in G.
-	
-	# PROVE FATTE
-	#reduce(lambda x, y: (x[0], x[1] + y[1]))
-	#t_2 = T_i.reduceByKey(lambda x, y: (0, x[1] + y[1]))
-	#t_2 = T_i.reduce(lambda x, y: x+y )
-	#T_i.reduceByKey(lambda x, y: x + y).map(lambda x: x[1]).sum()
-	
 	return C**2 * T_i.map(lambda x: x[1]).reduce(lambda x, y: x + y) # <-- REDUCE PHASE (R2)
 	
 
@@ -136,14 +128,10 @@ def MR_ApproxTCwithSparkPartitions(edges, C):
 	"""
  	#	ROUND 1:
 	#Partition the edges at random into C subsets E(0),E(1),...E(C−1)
-	#E_i = edges.flatMap(lambda x: [(rand.randint(0, C-1), x)]) # <-- MAP PHASE (R1)
- 
-	#E = E_i.groupByKey() 		# <-- SHUFFLE+GROUPING (R1)
+	#We don't need a map phase because the RDD is already into a C partitions.
 	
-
 	#Compute the partial counts T(0),T(1),...,T(C−1) of triangles in each subset E(i)
 	T_i = edges.mapPartitions(lambda partition: [CountTriangles(partition)]) # <-- REDUCE PHASE (R1)
-	#T_i = E.mapValues(CountTriangles)	# <-- REDUCE PHASE (R1)
 
 	#	ROUND 2:
  	#Compute the total count
@@ -179,9 +167,9 @@ def main():
 	data_path = sys.argv[3]
 	assert os.path.isfile(data_path), "File or folder not found"
 	
-	#TODO IMPORTANTE: It is important that the local space required by the algorithm be proportional to the size of the largest subset E(i)
-	
+	#Reads the input graph into an RDD of strings (called rawData)
 	rawData = sc.textFile(data_path, minPartitions = C)
+	#and transform it into an RDD of edges (called edges), represented as pairs of integers, partitioned into C partitions, and cached.
 	edges = rawData.map(lambda x: tuple(map(int, x.split(',')))).repartition(numPartitions = C).cache()
   
  	# 3. Prints: the name of the file, the number of edges of the graph, C, and R.
@@ -194,21 +182,26 @@ def main():
 	# 4. Runs R times MR_ApproxTCwithNodeColors to get R independent estimates tfinal of the number of triangles in the input graph.
 	print("Approximation through node coloring")
 	sum = 0
+	time_sum = 0
 	for i in range(R):	
+		start_time = time.time()
 		sum += MR_ApproxTCwithNodeColors(edges, C)
+		time_sum += time.time() - start_time
 
 	# 5. Prints: the median of the R estimates returned by MR_ApproxTCwithNodeColors and the average running time of MR_ApproxTCwithNodeColors over the R runs.
 	print("- Number of triangles (median over "+ str(R) +" runs) = " + str(int(sum/R)))
-	#TODO  Running time (average over 5 runs) = 481 ms
+	print("- Running time (average over "+ str(R) +" runs) = " + str(int(time_sum*1000/R)) + " ms")
 	
 		
 	# 6. Runs MR_ApproxTCwithSparkPartitions to get an estimate tfinal of the number of triangles in the input graph.
 	print("Approximation through Spark partitions")
+	start_time = time.time()
 	tot = MR_ApproxTCwithSparkPartitions(edges, C)
+	time_sum = time.time() - start_time
   
 	# 7. Prints: the estimate returned by MR_ApproxTCwithSparkPartitions and its running time.
 	print("- Number of triangles = " + str(tot))
-	#TODO  Running time (average over 5 runs) = 481 ms
+	print("- Running time = " + str(int(time_sum*1000)) + " ms")
 	
 	sc.stop()
 
