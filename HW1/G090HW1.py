@@ -43,25 +43,29 @@ def MR_ApproxTCwithNodeColors(edges, C):
 
 
 def MR_ApproxTCwithSparkPartitions(edges, C):
-	"""
-	Second Algorithm.
-		
-	Args:
-		edges: RDD of edges.
-		
-	Returns:
-		int: number of triangles.
-	"""
- 	#	ROUND 1:
-	#Partition the edges at random into C subsets E(0),E(1),...E(C−1)
-	#We don't need a map phase because the RDD is already into a C partitions.
-	
-	#Compute the partial counts T(0),T(1),...,T(C−1) of triangles in each subset E(i)
-	T_i = edges.mapPartitions(lambda partition: [CountTriangles(partition)]) # <-- REDUCE PHASE (R1)
+    """
+    Second Algorithm.
 
-	#	ROUND 2:
- 	#Compute the total count
-	return C**2 * T_i.reduce(lambda x, y: x + y)# <-- REDUCE PHASE (R2)
+    Args:
+        edges: RDD of edges.
+
+    Returns:
+        int: number of triangles.
+    """
+    # ROUND 1:
+    # Partition the edges at random into C subsets E(0),E(1),...E(C−1)
+    # We don't need a map phase because the RDD is already into a C partitions.
+
+    # Deduplicate the edges <- teorically, we should not use this function, but without it the number of triangles diverges
+    edges = edges.distinct()
+
+    # Compute the partial counts T(0),T(1),...,T(C−1) of triangles in each subset E(i)
+    T_i = edges.mapPartitions(lambda partition: [CountTriangles(partition)]) # <-- REDUCE PHASE (R1)
+
+    # ROUND 2:
+    # Compute the total count
+    return C**2 * T_i.reduce(lambda x, y: x + y) # <-- REDUCE PHASE (R2)
+
 	
 
 
