@@ -55,8 +55,6 @@ def MR_ApproxTCwithSparkPartitions(edges, C):
     # ROUND 1:
     # Partition the edges at random into C subsets E(0),E(1),...E(C−1)
     # We don't need a map phase because the RDD is already into a C partitions.
-
-    # Deduplicate the edges <- teorically, we should not use this function, but without it the number of triangles diverges
     edges = edges.distinct()
 
     # Compute the partial counts T(0),T(1),...,T(C−1) of triangles in each subset E(i)
